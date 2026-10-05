@@ -1,0 +1,114 @@
+name: file-code-stack
+
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  traefik:
+    image: ${TRAEFIK_IMAGE:?Set a tested Traefik v3 image digest}
+    user: "20003:20003"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./traefik/generated:/etc/traefik:ro
+      - /data/traefik/acme:/acme
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--configFile=/etc/traefik/traefik.yaml"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [s3_proxy, git_proxy]
+    mem_limit: 256m
+    cpus: "0.75"
+    pids_limit: 128
+    logging: *logs
+
+  otterio:
+    image: ${OTTERIO_IMAGE:?Set a security-fixed OtterIO image digest}
+    user: "20002:20002"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Keep the pinned release's credential-validation entrypoint.
+    command: [server, --address, ':9000', --console-address, ':9001', /data]
+    environment:
+      HOME: /tmp
+      OTTERIO_REGION_NAME: us-east-1
+      OTTERIO_ROOT_USER_FILE: /run/secrets/root_user
+      OTTERIO_ROOT_PASSWORD_FILE: /run/secrets/root_password
+      OTTERIO_ACCESS_KEY_FILE: ''
+      OTTERIO_SECRET_KEY_FILE: ''
+    secrets: [root_user, root_password]
+    volumes:
+      - /data/otterio:/data
+    ports:
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=128m,uid=20002,gid=20002,mode=1777"]
+    networks: [s3_proxy]
+    mem_limit: 768m
+    cpus: "1.0"
+    pids_limit: 256
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    stop_grace_period: 60s
+    logging: *logs
+
+  gitea:
+    image: ${GITEA_IMAGE:?Set a tested Gitea rootless image digest}
+    user: "20001:20001"
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    # Keep image root writable until chosen rootless image initialization is verified.
+    environment:
+      GITEA__server__DOMAIN: ${GIT_DOMAIN:?Set Git domain}
+      GITEA__server__ROOT_URL: https://${GIT_DOMAIN}/
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__server__DISABLE_SSH: "true"
+      GITEA__server__START_SSH_SERVER: "false"
+      GITEA__server__LFS_START_SERVER: "false"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /var/lib/gitea/data/gitea.db
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__service__ENABLE_BASIC_AUTHENTICATION: "false"
+      GITEA__security__DISABLE_GIT_HOOKS: "true"
+      GITEA__security__DISABLE_WEBHOOKS: "true"
+      GITEA__security__IMPORT_LOCAL_PATHS: "false"
+      GITEA__actions__ENABLED: "false"
+      GITEA__packages__ENABLED: "false"
+      GITEA__repository__ENABLE_PUSH_CREATE_USER: "false"
+      GITEA__repository__ENABLE_PUSH_CREATE_ORG: "false"
+      GITEA__log__MODE: console
+    volumes:
+      - /data/gitea/data:/var/lib/gitea
+      - /data/gitea/config:/etc/gitea
+    ports:
+      - "127.0.0.1:13000:3000"
+    tmpfs: ["/tmp:rw,nosuid,size=128m,uid=20001,gid=20001,mode=1777"]
+    networks: [git_proxy]
+    mem_limit: 1280m
+    cpus: "1.5"
+    pids_limit: 512
+    stop_grace_period: 60s
+    logging: *logs
+
+networks:
+  s3_proxy:
+  git_proxy:
+
+secrets:
+  root_user: {file: ./secrets/root_user}
+  root_password: {file: ./secrets/root_password}

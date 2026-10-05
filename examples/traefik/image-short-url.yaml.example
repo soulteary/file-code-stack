@@ -1,0 +1,13 @@
+# Optional file-provider route. Replace the hostname before installation.
+# Requires the existing otterio service and image-headers middleware.
+http:
+  routers:
+    image-short-url:
+      rule: 'Host(`img.example.com`) && PathRegexp(`^/[0-9]{4}/[0-9]{2}/[0-9]{2}/.+$`) && (Method(`GET`) || Method(`HEAD`))'
+      entryPoints: [websecure]
+      service: otterio
+      middlewares: [image-bucket-prefix, image-headers]
+  middlewares:
+    image-bucket-prefix:
+      addPrefix:
+        prefix: /images

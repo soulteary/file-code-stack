@@ -1,0 +1,92 @@
+{
+  "http": {
+    "routers": {
+      "images": {
+        "rule": "Host(`${IMAGE_DOMAIN}`) && PathPrefix(`/images/`) && (Method(`GET`) || Method(`HEAD`))",
+        "entryPoints": [
+          "websecure"
+        ],
+        "service": "otterio",
+        "middlewares": [
+          "image-headers"
+        ]
+      },
+      "downloads": {
+        "rule": "Host(`${DOWNLOAD_DOMAIN}`) && PathPrefix(`/downloads/`) && (Method(`GET`) || Method(`HEAD`))",
+        "entryPoints": [
+          "websecure"
+        ],
+        "service": "otterio",
+        "middlewares": [
+          "image-headers"
+        ]
+      },
+      "s3": {
+        "rule": "Host(`${S3_DOMAIN}`)",
+        "entryPoints": [
+          "websecure"
+        ],
+        "service": "otterio",
+        "middlewares": [
+          "uploader-ips"
+        ]
+      },
+      "git": {
+        "rule": "Host(`${GIT_DOMAIN}`)",
+        "entryPoints": [
+          "websecure"
+        ],
+        "service": "gitea",
+        "middlewares": [
+          "git-bootstrap-ips"
+        ]
+      }
+    },
+    "services": {
+      "otterio": {
+        "loadBalancer": {
+          "passHostHeader": true,
+          "servers": [
+            {
+              "url": "http://otterio:9000"
+            }
+          ]
+        }
+      },
+      "gitea": {
+        "loadBalancer": {
+          "passHostHeader": true,
+          "servers": [
+            {
+              "url": "http://gitea:3000"
+            }
+          ]
+        }
+      }
+    },
+    "middlewares": {
+      "uploader-ips": {
+        "ipAllowList": {
+          "sourceRange": "${UPLOAD_CIDRS}"
+        }
+      },
+      "git-bootstrap-ips": {
+        "ipAllowList": {
+          "sourceRange": "${ADMIN_CIDRS}"
+        }
+      },
+      "image-headers": {
+        "headers": {
+          "contentTypeNosniff": true
+        }
+      }
+    }
+  },
+  "tls": {
+    "options": {
+      "default": {
+        "minVersion": "VersionTLS12"
+      }
+    }
+  }
+}

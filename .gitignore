@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+secrets/
+state/
+*.log
+.DS_Store
+traefik/generated/
+__pycache__/
+traefik/custom/

@@ -1,0 +1,26 @@
+name: 问题报告
+description: 报告可复现的部署、脚本或文档问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "请先阅读 docs/troubleshooting.md。不要粘贴凭据、ACME 私钥、完整环境或签名 URL；安全问题按 SECURITY.md 报告。"
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 系统、CPU 架构、部署提交、Docker/Compose、镜像版本或摘要、TLS_MODE
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤与预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: 实际结果与脱敏日志
+    validations:
+      required: true

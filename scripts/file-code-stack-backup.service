@@ -1,0 +1,11 @@
+[Unit]
+Description=Consistent encrypted backup of file-code-stack
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/app/file-code-stack/scripts/backup.sh
+TimeoutStartSec=infinity
+UMask=0077

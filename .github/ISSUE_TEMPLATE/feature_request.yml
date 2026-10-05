@@ -1,0 +1,14 @@
+name: 改进建议
+description: 提出新的使用场景或文档改进
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: 使用场景与当前问题
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议与验证方法
+      description: 说明部署、权限、维护或兼容性影响。
