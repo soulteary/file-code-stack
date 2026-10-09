@@ -23,6 +23,28 @@ COMPOSE_FILE=compose.yaml:traefik/generated/compose.yaml
 
 HTTPS 入口统一设置默认 resolver，路由不重复声明 `tls`；即便空 `tls: {}` 也会覆盖入口默认值，详见 [入口 TLS 配置](https://doc.traefik.io/traefik/reference/install-configuration/entrypoints/)。自定义路由若明确指定 TLS，需同时明确所需 resolver。
 
+## 单域名与泛域名证书
+
+默认 `TLS_CERT_MODE=hosts`、`WILDCARD_DOMAIN=`，Traefik 按四条 `Host()` 路由申请域名证书。HTTP-01 和两种 DNS-01 均可使用。
+
+申请 `*.example.ltd` 形式的泛域名证书时，替换为自己控制的域名，并设置：
+
+```text
+TLS_MODE=cloudflare
+TLS_CERT_MODE=wildcard
+WILDCARD_DOMAIN=*.example.ltd
+IMAGE_DOMAIN=img.example.ltd
+DOWNLOAD_DOMAIN=files.example.ltd
+S3_DOMAIN=s3.example.ltd
+GIT_DOMAIN=git.example.ltd
+```
+
+也可使用 `TLS_MODE=alidns`。泛域名只支持 DNS-01，生成器拒绝 HTTP-01、非法域名和不受证书覆盖的服务域名。证书同时包含根域和 `*.根域`，仅覆盖一级子域，不覆盖 `a.b.example.ltd`。四个服务仍必须使用不同的准确域名。
+
+生成器设置入口 `http.tls.domains` 的 `main` 和 `sans`，保留 `certResolver=le`；所有路由继承此 TLS 设置。匹配规则仍是准确的 `Host()`，不会把任意子域送往 S3 或 Git，也不使用 ``Host(`*.example.ltd`)``。证书覆盖范围与业务路由是两个设置。详见 [Traefik ACME 泛域名说明](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/#wildcard-domains)。
+
+变更后按下方生成、预检查、应用并重启 Traefik。DNS 凭据需允许操作根域 `_acme-challenge` TXT；验收四个域名的实际证书 SAN、续期和路由，未知子域不应匹配业务路由。
+
 ## 服务 UID/GID
 
 本项目固定 Gitea=20001:20001、OtterIO=20002:20002、Traefik=20003:20003。这些数字用于容器和挂载目录，不创建同号宿主机账号。宿主机 ubuntu=1000、lighthouse=1001 和 deploy=1002 可以保持不变。init-state 和 preflight 在写入前检查这些 UID/GID 是否被宿主机账号占用；不要把预留范围用于新登录账号。
@@ -31,14 +53,14 @@ Gitea rootless 支持 [自定义用户](https://docs.gitea.com/installation/inst
 
 ## 镜像固定
 
-OtterIO 示例固定为 `ghcr.io/soulteary/otterio:RELEASE.2026-10-07T14-09-17Z`，标签采用 UTC，对应北京时间十月七日 22:09:17。先拉取并记录 RepoDigests：
+OtterIO 示例固定为 `ghcr.io/soulteary/otterio:RELEASE.2026-10-09T15-22-07Z`，标签采用 UTC，对应北京时间十月九日 23:22:07。先拉取并记录 RepoDigests：
 
 ```bash
-sudo docker pull ghcr.io/soulteary/otterio:RELEASE.2026-10-07T14-09-17Z
-sudo docker image inspect ghcr.io/soulteary/otterio:RELEASE.2026-10-07T14-09-17Z --format '{{json .RepoDigests}}'
+sudo docker pull ghcr.io/soulteary/otterio:RELEASE.2026-10-09T15-22-07Z
+sudo docker image inspect ghcr.io/soulteary/otterio:RELEASE.2026-10-09T15-22-07Z --format '{{json .RepoDigests}}'
 ```
 
-从 [OtterIO Release 页面](https://github.com/soulteary/otterio/releases/tag/RELEASE.2026-10-07T14-09-17Z)下载 `release-manifest.json`，核对版本、仓库和摘要。`RepoDigests` 与 IMAGE ID 不同，多平台索引与平台镜像摘要也不同；比较前确认对应对象，并记录实际运行架构。清单记录镜像身份，本身不等于签名或可复现构建证明。
+从 [OtterIO Release 页面](https://github.com/soulteary/otterio/releases/tag/RELEASE.2026-10-09T15-22-07Z)下载 `release-manifest.json`，核对版本、仓库和摘要。`RepoDigests` 与 IMAGE ID 不同，多平台索引与平台镜像摘要也不同；比较前确认对应对象，并记录实际运行架构。清单记录镜像身份，本身不等于签名或可复现构建证明。
 
 Traefik 选择受支持、经过验证的 v3 正式版，Gitea 使用官方 `ghcr.io/go-gitea/gitea:28.1.0-rootless` 正式版，用同样方式记录摘要；不要把普通 Gitea 镜像的挂载布局用于 rootless 镜像。模板未预填 Traefik/Gitea 的生产镜像，也不声称任意版本均已验收。保存实际版本标签、架构、完整 RepoDigest 和检查日期；不要只记录 `v3` 或 `latest`。
 

@@ -44,6 +44,8 @@ services:
     command: [server, --address, ':9000', --console-address, ':9001', /data]
     environment:
       HOME: /tmp
+      # OC provides the operator UI; retain port 9001 for its management API.
+      OTTERIO_BROWSER: "off"
       OTTERIO_REGION_NAME: us-east-1
       OTTERIO_ROOT_USER_FILE: /run/secrets/root_user
       OTTERIO_ROOT_PASSWORD_FILE: /run/secrets/root_password

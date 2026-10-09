@@ -1,8 +1,8 @@
 # file-code-stack
 
-用 Docker Compose 在 Ubuntu 云服务器部署文件存储、公开下载与代码托管：Traefik 提供 HTTPS，OtterIO 提供 S3 兼容存储，Gitea 提供 Git 服务。
+用 Docker Compose 在 Ubuntu 云服务器部署文件存储、公开下载与代码托管：Traefik 提供 HTTPS，OtterIO 提供 S3 兼容存储，OC 提供本机管理界面，Gitea 提供 Git 服务。
 
-默认公开 80/443，后台端口绑定本机；应用使用非 root UID，Traefik 使用文件路由，不挂载 Docker socket。配置放在 `/app/file-code-stack`，数据放在 `/data` 挂载点，支持 HTTP-01、AliDNS 和 Cloudflare DNS-01。
+默认公开 80/443，后台端口绑定本机；应用使用非 root UID，Traefik 使用文件路由，不挂载 Docker socket。配置放在 `/app/file-code-stack`，数据放在 `/data` 挂载点，支持 HTTP-01、AliDNS 和 Cloudflare DNS-01，可选择单域名或泛域名证书。
 
 ## 首次部署
 

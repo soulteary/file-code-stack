@@ -47,6 +47,8 @@ def validated(values):
     for key in required[:3]:
         if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}', values[key]):
             raise ValueError(f'Expected a pinned image digest: {key}')
+    values.setdefault('TLS_CERT_MODE', 'hosts')
+    values.setdefault('WILDCARD_DOMAIN', '')
     domains = []
     for key in ['IMAGE_DOMAIN', 'DOWNLOAD_DOMAIN', 'S3_DOMAIN', 'GIT_DOMAIN']:
         domain = values[key].lower()
@@ -65,6 +67,24 @@ def validated(values):
         raise ValueError('Expected a real ACME_EMAIL')
     if values['TLS_MODE'] not in ['http', 'alidns', 'cloudflare']:
         raise ValueError('TLS_MODE must be http, alidns or cloudflare')
+    if values['TLS_CERT_MODE'] not in ['hosts', 'wildcard']:
+        raise ValueError('TLS_CERT_MODE must be hosts or wildcard')
+    wildcard = values['WILDCARD_DOMAIN']
+    if values['TLS_CERT_MODE'] == 'wildcard':
+        if values['TLS_MODE'] == 'http':
+            raise ValueError('Wildcard certificates require DNS-01: alidns or cloudflare')
+        if not wildcard.startswith('*.'):
+            raise ValueError('WILDCARD_DOMAIN must start with *.')
+        base = wildcard[2:]
+        if len(wildcard) > 253 or '.' not in base or not all(
+            re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+            for label in base.split('.')
+        ) or base == 'example.com' or base.endswith('.example.com'):
+            raise ValueError('Expected a real lowercase wildcard DNS domain')
+        if any(domain != base and domain.split('.', 1)[1] != base for domain in domains):
+            raise ValueError('All service domains must be covered by WILDCARD_DOMAIN (apex or one subdomain level)')
+    elif wildcard:
+        raise ValueError('WILDCARD_DOMAIN must be empty in hosts mode')
     if values['GIT_BOOTSTRAP'] not in ['true', 'false']:
         raise ValueError('GIT_BOOTSTRAP must be true or false')
     if values['COMPOSE_FILE'] != COMPOSE_FILES:
@@ -101,6 +121,9 @@ def build(values, root=ROOT):
     values = validated(values)
     static, routes = [substitute(json.loads((root / f'traefik/templates/{name}.json').read_text()), values)
                       for name in ['static', 'routes']]
+    if values['TLS_CERT_MODE'] == 'wildcard':
+        static['entryPoints']['websecure']['http']['tls']['domains'] = [
+            {'main': values['WILDCARD_DOMAIN'][2:], 'sans': [values['WILDCARD_DOMAIN']]}]
     acme = static['certificatesResolvers']['le']['acme']
     override = {'services': {}}
     if values['TLS_MODE'] == 'http':

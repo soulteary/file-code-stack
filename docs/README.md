@@ -14,6 +14,7 @@
 
 ## 按任务查找
 
+- 管理 S3 存储：[OC 本机管理界面](oc.md)。
 - 申请 DNS-01 证书：[AliDNS](alidns.md)、[Cloudflare](cloudflare.md)。配置应用步骤统一见[配置说明](configuration.md#生成与应用)。
 - 接入 CDN 或检查缓存：[CDN](cdn.md)。
 - 检查资源、日志和容器权限：[运维](operations.md)。

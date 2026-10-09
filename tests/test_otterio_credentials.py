@@ -28,4 +28,5 @@ class CredentialsTests(unittest.TestCase):
                 self.assertEqual(service['environment'][f'OTTERIO_{key}_FILE'],f'/run/secrets/{name}')
             for key in ['ACCESS_KEY','SECRET_KEY']:
                 self.assertEqual(service['environment'][f'OTTERIO_{key}_FILE'],'')
+            self.assertEqual(service['environment']['OTTERIO_BROWSER'], 'off')
             self.assertNotIn('OTTERIO_ROOT_PASSWORD',service['environment'])

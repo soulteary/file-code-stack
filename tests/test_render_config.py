@@ -21,6 +21,45 @@ def inputs():
 
 
 class ConfigTests(unittest.TestCase):
+    def test_wildcard_dns_modes_and_exact_routes(self):
+        for provider in ['alidns', 'cloudflare']:
+            with self.subTest(provider=provider):
+                files = render.build(inputs() | {'TLS_MODE': provider,
+                    'TLS_CERT_MODE': 'wildcard', 'WILDCARD_DOMAIN': '*.test.net'})
+                tls = files[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']
+                self.assertEqual(tls, {'certResolver': 'le',
+                    'domains': [{'main': 'test.net', 'sans': ['*.test.net']}]})
+                acme = files[Path('traefik.yaml')]['certificatesResolvers']['le']['acme']
+                self.assertEqual(acme['dnsChallenge']['provider'], provider)
+                self.assertNotIn('httpChallenge', acme)
+                routers = files[Path('dynamic/routes.yaml')]['http']['routers']
+                self.assertEqual(routers['s3']['rule'], 'Host(`s3.test.net`)')
+                for router in routers.values():
+                    self.assertNotIn('tls', router)
+                    self.assertNotIn('*', router['rule'])
+
+    def test_wildcard_accepts_apex_but_not_nested_or_unrelated_domains(self):
+        values = inputs() | {'TLS_MODE': 'cloudflare', 'TLS_CERT_MODE': 'wildcard',
+                             'WILDCARD_DOMAIN': '*.test.net'}
+        render.build(values | {'GIT_DOMAIN': 'test.net'})
+        for domain in ['git.other.net', 'git.sub.test.net']:
+            with self.subTest(domain=domain), self.assertRaises(ValueError):
+                render.build(values | {'GIT_DOMAIN': domain})
+
+    def test_reject_invalid_certificate_selections(self):
+        values = inputs() | {'TLS_MODE': 'alidns', 'TLS_CERT_MODE': 'wildcard',
+                             'WILDCARD_DOMAIN': '*.test.net'}
+        invalid = [{'TLS_MODE': 'http'}, {'TLS_CERT_MODE': 'invalid'},
+                   {'TLS_CERT_MODE': 'hosts'}, {'WILDCARD_DOMAIN': ''},
+                   {'WILDCARD_DOMAIN': '*.*.test.net'}, {'WILDCARD_DOMAIN': '*.Test.net'},
+                   {'WILDCARD_DOMAIN': '*.example.com'}, {'WILDCARD_DOMAIN': 'test.net'},
+                   {'WILDCARD_DOMAIN': '*.test.net`) || Host(`evil.net'}]
+        for change in invalid:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                render.build(values | change)
+        self.assertNotIn('domains', render.build(inputs())[Path('traefik.yaml')]
+                         ['entryPoints']['websecure']['http']['tls'])
+
     def test_http_and_security_boundaries(self):
         files = render.build(inputs())
         static = files[Path('traefik.yaml')]

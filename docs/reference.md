@@ -20,12 +20,14 @@ tests/                   临时环境测试
 
 ## .env 字段
 
-以下字段全部必填；完整语法与应用步骤见[配置说明](configuration.md)。
+既有字段全部必填；新增证书字段省略时兼容原来的单域名模式；完整语法与应用步骤见[配置说明](configuration.md)。
 
 - `TRAEFIK_IMAGE`、`OTTERIO_IMAGE`、`GITEA_IMAGE`：经过核对的 `repository@sha256:` 加 64 位小写十六进制摘要。镜像标签仅用于选择版本和核对来源。
 - `IMAGE_DOMAIN`、`DOWNLOAD_DOMAIN`、`S3_DOMAIN`、`GIT_DOMAIN`：四个不同的小写 DNS 主机名，不带协议、路径或端口。分别对应公开图片、下载、受限 S3 API 和 Git。
 - `ACME_EMAIL`：ACME 账号邮箱。
 - `TLS_MODE`：`http`、`alidns` 或 `cloudflare`。
+- `TLS_CERT_MODE`：`hosts`（默认）或 `wildcard`。
+- `WILDCARD_DOMAIN`：hosts 模式留空；wildcard 模式填写 `*.实际根域`，必须使用 DNS-01，所有服务域名须被覆盖。
 - `UPLOAD_CIDRS`：访问 S3 入口的客户端出口网段，逗号分隔，单 IPv4 用 `/32`，单 IPv6 用 `/128`。
 - `ADMIN_CIDRS`：Git 初始化期间允许的管理来源，格式同上；不控制宿主机 SSH。
 - `GIT_BOOTSTRAP`：首次安装用 `true`；安装锁和管理员验证完成后用 `false` 开放 Git 入口。
@@ -38,6 +40,7 @@ tests/                   临时环境测试
 - `scripts/init-state.sh`：root 在服务器执行；要求 `/data` 已挂载、服务 UID/GID 空闲，准备目录、缺失的凭据、`.env` 与 ACME 文件。不启动容器，不覆盖已有凭据。
 - `scripts/render-config.py`：从 `.env` 和模板生成三个文件；`--check` 只检查，不写入。Python 仅使用标准库。
 - `scripts/preflight.sh`：检查挂载、运行身份、凭据和生成结果，校验合并后的 Compose；必须在应用配置前运行。
+- `scripts/build-oc.sh`：管理电脑构建固定版本的 OC CLI 和本机 Web 界面，见 [OC 管理](oc.md)。
 - `scripts/audit.sh`：检查运行中的容器权限、挂载、监听和资源，用 `sudo` 在服务器运行。
 - `scripts/backup.sh`：停两个后端进行 restic 一致性备份；`--recover` 用于未完成恢复标记。详见[备份说明](backup.md)。
 - `scripts/docker-data.conf`：整个 Docker daemon 的 `/data` 挂载依赖与启动检查。

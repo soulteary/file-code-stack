@@ -53,6 +53,7 @@ OtterIO 使用镜像自带的入口脚本加载用户名和密码。下面是仓
 command: [server, --address, ':9000', --console-address, ':9001', /data]
 environment:
   HOME: /tmp
+  OTTERIO_BROWSER: "off"
   OTTERIO_REGION_NAME: us-east-1
   OTTERIO_ROOT_USER_FILE: /run/secrets/root_user
   OTTERIO_ROOT_PASSWORD_FILE: /run/secrets/root_password
@@ -63,7 +64,7 @@ secrets: [root_user, root_password]
 
 两个 `_FILE` 变量指向容器内的绝对路径，Compose 将宿主机上的凭据文件挂载到对应位置。保留镜像原有的 `entrypoint`，不绕过它的凭据检查。
 
-这个版本要求显式配置非默认凭据。这里统一使用文件方式，不再为同一个设置提供非空环境变量，也不混用新旧两组凭据变量。文件必须可读、非空且为普通文件；镜像不会自动调整数据目录归属，启动前需要核对权限，具体要求见[版本发布说明](https://github.com/soulteary/otterio/releases/tag/RELEASE.2026-10-07T14-09-17Z)。
+这个版本要求显式配置非默认凭据。这里统一使用文件方式，不再为同一个设置提供非空环境变量，也不混用新旧两组凭据变量。文件必须可读、非空且为普通文件；镜像不会自动调整数据目录归属，启动前需要核对权限，具体要求见[版本发布说明](https://github.com/soulteary/otterio/releases/tag/RELEASE.2026-10-09T15-22-07Z)。
 
 ## 创建存储桶和上传账号
 
@@ -82,9 +83,9 @@ ssh -N \
   "deploy@$SERVER_IP"
 ```
 
-命令运行期间保留这个终端。19001 用于访问控制台，19000 用于通过本机工具测试 S3 API；本地监听地址明确绑定为 `127.0.0.1`，不向管理电脑所在网络开放。
+命令运行期间保留这个终端。19001 用于 OC 连接管理 API，19000 用于连接 S3 API；本地监听地址明确绑定为 `127.0.0.1`，不向管理电脑所在网络开放。
 
-在本机浏览器打开 `http://127.0.0.1:19001`，使用本页前面保存的管理员凭据登录。
+按 [OC 管理界面](oc.md)在管理电脑构建固定版本的 OC，设置 S3 与独立管理地址，启动 `oc-console --alias store --allow-writes`，浏览器打开它打印的本机 URL 并输入 login code。19001 只提供管理 API，OtterIO 自带界面已关闭。
 
 在控制台完成下面几步：
 

@@ -2,7 +2,9 @@
 
 ## 先确定服务入口
 
-公网请求统一交给 Traefik，服务器只开放 TCP `80`、`443`，以及限制来源 IP 的 SSH 端口。OtterIO 的 API、控制台和 Gitea 的后端端口只绑定宿主机 `127.0.0.1`，需要直接访问时，通过 SSH 隧道连接。Gitea 的日常浏览和 HTTPS clone 仍走 Traefik。
+公网请求统一交给 Traefik，服务器只开放 TCP `80`、`443`，以及限制来源 IP 的 SSH 端口。OtterIO 的 S3、管理 API 和 Gitea 的后端端口只绑定宿主机 `127.0.0.1`，需要直接访问时，通过 SSH 隧道连接。Gitea 的日常浏览和 HTTPS clone 仍走 Traefik。
+
+管理界面使用 [OC](oc.md)，在管理电脑本机运行，通过 SSH 隧道连接两个 OtterIO API。OtterIO 自带浏览器关闭；OC 界面不经 Traefik 发布。
 
 Traefik 同时加入 `s3_proxy` 和 `git_proxy` 两个网络，分别连接 OtterIO 和 Gitea。两个后端不共享网络，减少直接互访。这里的网络划分主要用于隔离服务；普通 Docker 桥接网络仍可能访问公网和部分宿主机地址，如需限制出站访问，还要单独配置规则。
 
