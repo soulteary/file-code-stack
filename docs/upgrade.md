@@ -6,7 +6,7 @@
 
 [OtterIO 这个版本](https://github.com/soulteary/otterio/releases/tag/RELEASE.2026-10-09T15-22-07Z)更新对象版本和标签授权：历史版本列举需要明确的 `s3:ListBucketVersions`，当前与历史版本读取分别授权，缓存读取先核对后端元数据。此前生命周期、恢复、凭据和存储检查继续适用。
 
-升级前验证普通 S3、分片上传、当前／历史／null 版本读取与复制、存储标签条件及受限账号。缓存增加后端查询，需要观察请求开销。生命周期状态可能影响降级，先阅读目标版本说明并验证恢复方案。管理端使用 [OC RELEASE.2026-10-09T14-38-15Z](https://github.com/soulteary/oc/releases/tag/RELEASE.2026-10-09T14-38-15Z)，构建要求 Go 1.27.2；安装方式见[OC 管理界面](oc.md)。
+升级前验证普通 S3、分片上传、当前／历史／null 版本读取与复制、存储标签条件及受限账号。缓存增加后端查询，需要观察请求开销。生命周期状态可能影响降级，先阅读目标版本说明并验证恢复方案。管理端使用 [OC RELEASE.2026-10-09T17-33-03Z](https://github.com/soulteary/oc/releases/tag/RELEASE.2026-10-09T17-33-03Z)，构建要求 Go 1.27.2；安装方式见[OC 管理界面](oc.md)。
 
 这里使用单节点部署，数据目录只供存储服务写入。其他程序通过 S3 API 上传和下载，不直接修改 `/data/otterio` 中的文件。
 

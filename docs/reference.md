@@ -26,8 +26,9 @@ tests/                   临时环境测试
 - `IMAGE_DOMAIN`、`DOWNLOAD_DOMAIN`、`S3_DOMAIN`、`GIT_DOMAIN`：四个不同的小写 DNS 主机名，不带协议、路径或端口。分别对应公开图片、下载、受限 S3 API 和 Git。
 - `ACME_EMAIL`：ACME 账号邮箱。
 - `TLS_MODE`：`http`、`alidns` 或 `cloudflare`。
-- `TLS_CERT_MODE`：`hosts`（默认）或 `wildcard`。
-- `WILDCARD_DOMAIN`：hosts 模式留空；wildcard 模式填写 `*.实际根域`，必须使用 DNS-01，所有服务域名须被覆盖。
+- `TLS_CERT_MODE`：`hosts`（默认）、`wildcard`（兼容单泛域名配置）或 `custom`（显式域名列表）。
+- `TLS_DOMAINS`：custom 模式必填，用英文逗号分隔普通域名和／或泛域名；包含泛域名时必须使用 DNS-01；已被泛域名覆盖的普通域名不再单独申请证书。其他模式留空。
+- `WILDCARD_DOMAIN`：hosts 和 custom 模式留空；wildcard 模式填写 `*.实际根域`，必须使用 DNS-01，所有服务域名须被覆盖。
 - `UPLOAD_CIDRS`：访问 S3 入口的客户端出口网段，逗号分隔，单 IPv4 用 `/32`，单 IPv6 用 `/128`。
 - `ADMIN_CIDRS`：Git 初始化期间允许的管理来源，格式同上；不控制宿主机 SSH。
 - `GIT_BOOTSTRAP`：首次安装用 `true`；安装锁和管理员验证完成后用 `false` 开放 Git 入口。

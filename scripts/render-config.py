@@ -36,6 +36,60 @@ def read_env(path):
     return values
 
 
+def valid_hostname(domain):
+    return (len(domain) <= 253 and '.' in domain and
+            all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                for label in domain.split('.')) and
+            domain != 'example.com' and not domain.endswith('.example.com'))
+
+
+def certificate_domains(values, service_domains):
+    mode = values['TLS_CERT_MODE']
+    wildcard = values['WILDCARD_DOMAIN']
+    explicit = values['TLS_DOMAINS']
+    if mode not in ['hosts', 'wildcard', 'custom']:
+        raise ValueError('TLS_CERT_MODE must be hosts, wildcard or custom')
+    if mode == 'hosts':
+        if wildcard or explicit:
+            raise ValueError('WILDCARD_DOMAIN and TLS_DOMAINS must be empty in hosts mode')
+        return []
+    if mode == 'wildcard':
+        if explicit:
+            raise ValueError('Use TLS_DOMAINS only in custom mode')
+        if not wildcard.startswith('*.'):
+            raise ValueError('WILDCARD_DOMAIN must start with *.')
+        names = [wildcard]
+    else:
+        if wildcard:
+            raise ValueError('WILDCARD_DOMAIN must be empty in custom mode')
+        names = [name.strip() for name in explicit.split(',')]
+    if len(set(names)) != len(names):
+        raise ValueError('Duplicate certificate domains')
+    groups = {}
+    for name in names:
+        is_wildcard = name.startswith('*.')
+        base = name[2:] if is_wildcard else name
+        if len(name) > 253 or not valid_hostname(base):
+            raise ValueError('Expected a real lowercase certificate domain: '+name)
+        if is_wildcard and values['TLS_MODE'] == 'http':
+            raise ValueError('Wildcard certificates require DNS-01: alidns or cloudflare')
+        # A wildcard gets its base as main and the wildcard as SAN, as in legacy mode.
+        group = groups.setdefault(base, {'main': base})
+        if is_wildcard:
+            group['sans'] = [name]
+    # Validate every input before omitting explicit hosts covered by a wildcard.
+    # Keep nested wildcard groups: a parent wildcard does not cover their children.
+    wildcard_bases = {base for base, group in groups.items() if 'sans' in group}
+    groups = {base: group for base, group in groups.items()
+              if 'sans' in group or base.split('.', 1)[1] not in wildcard_bases}
+    for domain in service_domains:
+        if not any(domain == group['main'] or
+                   ('sans' in group and domain.split('.', 1)[1] == group['main'])
+                   for group in groups.values()):
+            raise ValueError('Service domain is not covered by certificate domains: '+domain)
+    return list(groups.values())
+
+
 def validated(values):
     values = dict(values)
     required = ['TRAEFIK_IMAGE', 'OTTERIO_IMAGE', 'GITEA_IMAGE', 'IMAGE_DOMAIN',
@@ -49,13 +103,11 @@ def validated(values):
             raise ValueError(f'Expected a pinned image digest: {key}')
     values.setdefault('TLS_CERT_MODE', 'hosts')
     values.setdefault('WILDCARD_DOMAIN', '')
+    values.setdefault('TLS_DOMAINS', '')
     domains = []
     for key in ['IMAGE_DOMAIN', 'DOWNLOAD_DOMAIN', 'S3_DOMAIN', 'GIT_DOMAIN']:
         domain = values[key].lower()
-        if len(domain) > 253 or '.' not in domain or not all(
-            re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
-            for label in domain.split('.')
-        ) or domain == 'example.com' or domain.endswith('.example.com'):
+        if not valid_hostname(domain):
             raise ValueError(f'Expected a real DNS hostname: {key}')
         # Compose also reads GIT_DOMAIN; require the same canonical spelling.
         if domain != values[key]:
@@ -67,24 +119,7 @@ def validated(values):
         raise ValueError('Expected a real ACME_EMAIL')
     if values['TLS_MODE'] not in ['http', 'alidns', 'cloudflare']:
         raise ValueError('TLS_MODE must be http, alidns or cloudflare')
-    if values['TLS_CERT_MODE'] not in ['hosts', 'wildcard']:
-        raise ValueError('TLS_CERT_MODE must be hosts or wildcard')
-    wildcard = values['WILDCARD_DOMAIN']
-    if values['TLS_CERT_MODE'] == 'wildcard':
-        if values['TLS_MODE'] == 'http':
-            raise ValueError('Wildcard certificates require DNS-01: alidns or cloudflare')
-        if not wildcard.startswith('*.'):
-            raise ValueError('WILDCARD_DOMAIN must start with *.')
-        base = wildcard[2:]
-        if len(wildcard) > 253 or '.' not in base or not all(
-            re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
-            for label in base.split('.')
-        ) or base == 'example.com' or base.endswith('.example.com'):
-            raise ValueError('Expected a real lowercase wildcard DNS domain')
-        if any(domain != base and domain.split('.', 1)[1] != base for domain in domains):
-            raise ValueError('All service domains must be covered by WILDCARD_DOMAIN (apex or one subdomain level)')
-    elif wildcard:
-        raise ValueError('WILDCARD_DOMAIN must be empty in hosts mode')
+    values['CERTIFICATE_DOMAINS'] = certificate_domains(values, domains)
     if values['GIT_BOOTSTRAP'] not in ['true', 'false']:
         raise ValueError('GIT_BOOTSTRAP must be true or false')
     if values['COMPOSE_FILE'] != COMPOSE_FILES:
@@ -121,9 +156,8 @@ def build(values, root=ROOT):
     values = validated(values)
     static, routes = [substitute(json.loads((root / f'traefik/templates/{name}.json').read_text()), values)
                       for name in ['static', 'routes']]
-    if values['TLS_CERT_MODE'] == 'wildcard':
-        static['entryPoints']['websecure']['http']['tls']['domains'] = [
-            {'main': values['WILDCARD_DOMAIN'][2:], 'sans': [values['WILDCARD_DOMAIN']]}]
+    if values['CERTIFICATE_DOMAINS']:
+        static['entryPoints']['websecure']['http']['tls']['domains'] = values['CERTIFICATE_DOMAINS']
     acme = static['certificatesResolvers']['le']['acme']
     override = {'services': {}}
     if values['TLS_MODE'] == 'http':

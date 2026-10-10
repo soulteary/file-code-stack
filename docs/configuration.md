@@ -45,6 +45,63 @@ GIT_DOMAIN=git.example.ltd
 
 变更后按下方生成、预检查、应用并重启 Traefik。DNS 凭据需允许操作根域 `_acme-challenge` TXT；验收四个域名的实际证书 SAN、续期和路由，未知子域不应匹配业务路由。
 
+### 多个普通域名、多个泛域名与混合配置
+
+使用 `TLS_CERT_MODE=custom`，将需要申请证书的名字放进 `TLS_DOMAINS`，用英文逗号分隔。单个普通域名、多个普通域名、多个泛域名和混合列表使用同一个字段：
+
+```text
+TLS_MODE=cloudflare
+TLS_CERT_MODE=custom
+WILDCARD_DOMAIN=
+TLS_DOMAINS=*.example.ltd,*.console.example.ltd,files.other.ltd
+IMAGE_DOMAIN=img.example.ltd
+DOWNLOAD_DOMAIN=files.other.ltd
+S3_DOMAIN=s3.example.ltd
+GIT_DOMAIN=git.console.example.ltd
+```
+
+这是示例，替换为实际域名。只申请普通域名时，例如：
+
+```text
+TLS_MODE=http
+TLS_CERT_MODE=custom
+WILDCARD_DOMAIN=
+TLS_DOMAINS=img.example.ltd,files.example.ltd,s3.example.ltd,git.example.ltd
+```
+
+只申请多个泛域名时，例如：
+
+```text
+TLS_MODE=alidns
+TLS_CERT_MODE=custom
+WILDCARD_DOMAIN=
+TLS_DOMAINS=*.example.ltd,*.console.example.ltd
+```
+
+普通域名可使用任一种验证方式；列表中包含任何泛域名，就必须使用 DNS-01。`custom` 模式不再填写旧字段 `WILDCARD_DOMAIN`。原来的 `hosts` 和 `wildcard` 模式保持兼容，省略新增字段时沿用原行为。
+
+生成器先省略已被列表中泛域名覆盖的普通域名，再将剩余普通域名写成独立的 `http.tls.domains` 条目；每个泛域名使用根域作为 `main`、泛域名作为 `sans`。例如上面的混合列表会生成：
+
+```yaml
+http:
+  tls:
+    certResolver: le
+    domains:
+      - main: example.ltd
+        sans: ["*.example.ltd"]
+      - main: console.example.ltd
+        sans: ["*.console.example.ltd"]
+      - main: files.other.ltd
+```
+
+这是 `entryPoints.websecure` 下的配置片段，实际文件由生成器写入，不手动另加。每个条目分别申请证书；如果普通域名与某个泛域名的根域相同，它们合并到一个条目。例如 `*.example.ltd,img.example.ltd,*.console.example.ltd,git.console.example.ltd` 只生成两个泛域名证书条目，不再单独申请 `img.example.ltd` 或 `git.console.example.ltd`，与列表顺序无关。根域仍作为泛域名证书的 `main` 保留；更深层的普通域名若没有对应泛域名覆盖，则继续单独申请。重复名字、空列表项、非法域名和未覆盖的服务域名会被拒绝。
+
+`*.example.ltd` 覆盖 `console.example.ltd`，但不覆盖 `git.console.example.ltd`；后者需要 `*.console.example.ltd` 或准确域名。生成的每个泛域名证书还包括自己的根域。配置额外的证书域名不会创建新的业务路由，也不会创建 DNS A/AAAA 记录；新增服务仍需单独配置准确的路由。
+
+当前配置只选择一个 DNS provider。多个根域需要由所选 provider 和凭据实际管理：Cloudflare Token 覆盖对应 Zone，AliDNS RAM 策略覆盖对应 DNS 域。如果域名分属不同 DNS provider，需要另行配置多个 resolver 和对应的路由 TLS 设置，不能只在列表中追加名字。
+
+修改后执行生成、预检查、应用配置并重启 Traefik。检查每个域名的实际证书和后端路由；配置校验不验证 DNS 管理权限，也不保证 CA 已签发证书。
+
 ## 服务 UID/GID
 
 本项目固定 Gitea=20001:20001、OtterIO=20002:20002、Traefik=20003:20003。这些数字用于容器和挂载目录，不创建同号宿主机账号。宿主机 ubuntu=1000、lighthouse=1001 和 deploy=1002 可以保持不变。init-state 和 preflight 在写入前检查这些 UID/GID 是否被宿主机账号占用；不要把预留范围用于新登录账号。

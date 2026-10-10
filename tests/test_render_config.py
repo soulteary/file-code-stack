@@ -21,6 +21,93 @@ def inputs():
 
 
 class ConfigTests(unittest.TestCase):
+    def test_custom_hostnames_with_all_challenges(self):
+        for provider in ['http', 'alidns', 'cloudflare']:
+            files = render.build(inputs() | {'TLS_MODE': provider, 'TLS_CERT_MODE': 'custom',
+                'TLS_DOMAINS': 'img.test.net, files.test.net,s3.test.net,git.test.net'})
+            domains = files[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']['domains']
+            self.assertEqual(domains, [{'main': name} for name in
+                ['img.test.net', 'files.test.net', 's3.test.net', 'git.test.net']])
+
+    def test_custom_mixed_and_nested_wildcards(self):
+        for provider in ['alidns', 'cloudflare']:
+            files = render.build(inputs() | {'TLS_MODE': provider, 'TLS_CERT_MODE': 'custom',
+                'TLS_DOMAINS': '*.test.net,*.console.test.net,files.other.net',
+                'GIT_DOMAIN': 'git.console.test.net', 'DOWNLOAD_DOMAIN': 'files.other.net'})
+            domains = files[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']['domains']
+            self.assertEqual(domains, [
+                {'main': 'test.net', 'sans': ['*.test.net']},
+                {'main': 'console.test.net', 'sans': ['*.console.test.net']},
+                {'main': 'files.other.net'}])
+            routers = files[Path('dynamic/routes.yaml')]['http']['routers']
+            self.assertEqual(routers['git']['rule'], 'Host(`git.console.test.net`)')
+            self.assertEqual(routers['s3']['middlewares'], ['uploader-ips'])
+
+    def test_custom_merges_apex_and_wildcard_in_either_order(self):
+        for names in ['test.net,*.test.net', '*.test.net,test.net']:
+            domains = render.build(inputs() | {'TLS_MODE': 'alidns', 'TLS_CERT_MODE': 'custom',
+                'TLS_DOMAINS': names})[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']['domains']
+            self.assertEqual(domains, [{'main': 'test.net', 'sans': ['*.test.net']}])
+
+    def test_custom_omits_hosts_covered_by_wildcards_in_either_order(self):
+        names = ['img.test.net', '*.test.net', 'git.console.test.net',
+                 '*.console.test.net', 'files.other.net', 'test.net']
+        for ordered in [names, list(reversed(names))]:
+            files = render.build(inputs() | {'TLS_MODE': 'cloudflare', 'TLS_CERT_MODE': 'custom',
+                'TLS_DOMAINS': ','.join(ordered), 'GIT_DOMAIN': 'git.console.test.net',
+                'DOWNLOAD_DOMAIN': 'files.other.net'})
+            groups = files[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']['domains']
+            self.assertEqual({g['main']: g.get('sans', []) for g in groups}, {
+                'test.net': ['*.test.net'], 'console.test.net': ['*.console.test.net'],
+                'files.other.net': []})
+            routers = files[Path('dynamic/routes.yaml')]['http']['routers']
+            self.assertEqual(routers['images']['rule'],
+                'Host(`img.test.net`) && PathPrefix(`/images/`) && (Method(`GET`) || Method(`HEAD`))')
+
+    def test_custom_keeps_hosts_beyond_wildcard_depth_or_suffix(self):
+        files = render.build(inputs() | {'TLS_MODE': 'alidns', 'TLS_CERT_MODE': 'custom',
+            'TLS_DOMAINS': '*.test.net,git.console.test.net,files.not-test.net',
+            'GIT_DOMAIN': 'git.console.test.net', 'DOWNLOAD_DOMAIN': 'files.not-test.net'})
+        groups = files[Path('traefik.yaml')]['entryPoints']['websecure']['http']['tls']['domains']
+        self.assertEqual(groups, [{'main': 'test.net', 'sans': ['*.test.net']},
+            {'main': 'git.console.test.net'}, {'main': 'files.not-test.net'}])
+
+    def test_custom_rejects_invalid_lists_and_uncovered_services(self):
+        values = inputs() | {'TLS_MODE': 'cloudflare', 'TLS_CERT_MODE': 'custom',
+                             'TLS_DOMAINS': '*.test.net'}
+        invalid = [{'TLS_DOMAINS': name} for name in
+                   ['', '*.test.net,', '*.test.net,,git.other.net', '*.test.net,*.test.net',
+                    '*.test.net,*.Test.net', '*.*.test.net', '*.example.com',
+                    '*.test.net,127.0.0.1:443', 'img.test.net', '*.other.net',
+                    '*.test.net`) || Host(`evil.net']]
+        invalid += [{'TLS_MODE': 'http'}, {'WILDCARD_DOMAIN': '*.test.net'},
+                    {'GIT_DOMAIN': 'git.console.test.net'}, {'TLS_CERT_MODE': 'hosts'},
+                    {'TLS_CERT_MODE': 'wildcard', 'WILDCARD_DOMAIN': '*.test.net'}]
+        for change in invalid:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                render.build(values | change)
+
+    def test_switch_custom_to_hosts_removes_explicit_domains(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copytree(ROOT / 'traefik/templates', root / 'traefik/templates')
+            values = inputs() | {'TLS_MODE': 'cloudflare', 'TLS_CERT_MODE': 'custom',
+                                 'TLS_DOMAINS': '*.test.net'}
+            env = root / '.env'
+            env.write_text('\n'.join(f'{k}={v}' for k,v in values.items()))
+            render.render(root)
+            before = (root / 'traefik/generated/traefik.yaml').read_bytes()
+            env.write_text('\n'.join(f'{k}={v}' for k,v in (values | {'TLS_DOMAINS': '*.other.net'}).items()))
+            with self.assertRaises(ValueError):
+                render.render(root)
+            self.assertEqual(before, (root / 'traefik/generated/traefik.yaml').read_bytes())
+            env.write_text('\n'.join(f'{k}={v}' for k,v in inputs().items()))
+            render.render(root)
+            import json
+            static = json.loads((root / 'traefik/generated/traefik.yaml').read_text())
+            self.assertNotIn('domains', static['entryPoints']['websecure']['http']['tls'])
+
     def test_wildcard_dns_modes_and_exact_routes(self):
         for provider in ['alidns', 'cloudflare']:
             with self.subTest(provider=provider):

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the operator tools on the management computer, never in the server data tree.
 set -euo pipefail
-release=RELEASE.2026-10-09T14-38-15Z
-source_sha=c62be561ef03f9b7749c53a2e71b3886efa76db4
+release=RELEASE.2026-10-09T17-33-03Z
+source_sha=99c6728ee75d10aaa7b6932a0ec07764258aa4ca
 [[ $# -eq 1 && ! -e $1 ]] || { echo 'Usage: build-oc.sh NEW_OUTPUT_DIRECTORY' >&2; exit 1; }
 output=$1
 work=$(mktemp -d)
@@ -13,7 +13,7 @@ mkdir "$work/tools"
 (
   cd "$work/source"
   export GOWORK=off GOTOOLCHAIN=local CGO_ENABLED=0
-  ldflags="-s -w -X github.com/soulteary/mc/cmd.Version=2026-10-09T14:38:15Z -X github.com/soulteary/mc/cmd.ReleaseTag=$release -X github.com/soulteary/mc/cmd.CommitID=$source_sha -X github.com/soulteary/mc/cmd.ShortCommitID=${source_sha:0:12}"
+  ldflags="-s -w -X github.com/soulteary/mc/cmd.Version=2026-10-09T17:33:03Z -X github.com/soulteary/mc/cmd.ReleaseTag=$release -X github.com/soulteary/mc/cmd.CommitID=$source_sha -X github.com/soulteary/mc/cmd.ShortCommitID=${source_sha:0:12}"
   go build -mod=readonly -trimpath -ldflags "$ldflags" -o "$work/tools/oc" .
   go build -mod=readonly -trimpath -ldflags "-X main.version=$release" -o "$work/tools/oc-console" ./cmd/oc-console
 )

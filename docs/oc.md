@@ -2,7 +2,7 @@
 
 S3 和管理 API 继续由 OtterIO 提供，操作界面改为 OC。Compose 关闭 OtterIO 自带浏览器，但保留 9001 管理 API（宿主机 `127.0.0.1:19001`）。公开图片、下载、S3 和 Git 路由不代理管理界面。
 
-固定使用 [OC RELEASE.2026-10-09T14-38-15Z](https://github.com/soulteary/oc/releases/tag/RELEASE.2026-10-09T14-38-15Z)，源码提交 `c62be561ef03f9b7749c53a2e71b3886efa76db4`。[上游控制台说明](https://github.com/soulteary/oc/blob/RELEASE.2026-10-09T14-38-15Z/docs/console.md)规定 `oc-console` 是单操作者、本机界面，监听 loopback；发布的 CLI 归档和容器不包含它。不要将 OC 界面放到 Traefik 或共享隧道后面。
+固定使用 [OC RELEASE.2026-10-09T17-33-03Z](https://github.com/soulteary/oc/releases/tag/RELEASE.2026-10-09T17-33-03Z)，源码提交 `99c6728ee75d10aaa7b6932a0ec07764258aa4ca`。[上游控制台说明](https://github.com/soulteary/oc/blob/RELEASE.2026-10-09T17-33-03Z/docs/console.md)规定 `oc-console` 是单操作者、本机界面，监听 loopback；发布的 CLI 归档和容器不包含它。不要将 OC 界面放到 Traefik 或共享隧道后面。
 
 ## 在管理电脑构建
 
