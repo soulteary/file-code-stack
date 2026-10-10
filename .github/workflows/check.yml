@@ -18,3 +18,26 @@ jobs:
           shellcheck --version
       - name: Check documentation, scripts and temporary configurations
         run: make check
+  render-configurations:
+    name: Render (${{ matrix.provider }} / ${{ matrix.certificate_case }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [http, alidns, cloudflare]
+        certificate_case: [hosts, explicit-hosts]
+        include:
+          - {provider: alidns, certificate_case: legacy}
+          - {provider: cloudflare, certificate_case: legacy}
+          - {provider: alidns, certificate_case: multiple-wildcards}
+          - {provider: cloudflare, certificate_case: multiple-wildcards}
+          - {provider: alidns, certificate_case: mixed-covered}
+          - {provider: cloudflare, certificate_case: mixed-covered}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate generated files with bootstrap enabled and disabled
+        run: >-
+          python3 tests/test_render_cli.py
+          --provider '${{ matrix.provider }}'
+          --certificate-case '${{ matrix.certificate_case }}'
